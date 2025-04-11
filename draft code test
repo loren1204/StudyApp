@@ -1,5 +1,6 @@
 //sample code
 //draft code to test UI 
+//NOTE: utilize the code for the spaceship position and its boundaries- should fit perfectly on the screen
 
 #include <SFML/Graphics.hpp>
 #include <vector>

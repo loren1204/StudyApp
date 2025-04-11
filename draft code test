@@ -1,0 +1,171 @@
+//sample code
+//draft code to test UI 
+
+#include <SFML/Graphics.hpp>
+#include <vector>
+#include <iostream>
+
+
+
+struct Bullet {
+    sf::RectangleShape shape;
+    float speed = -10.f;
+
+    Bullet(float x, float y) {
+        shape.setSize(sf::Vector2f(5, 10));
+        shape.setFillColor(sf::Color::Red);
+        shape.setPosition(x, y);
+    }
+
+    void update() {
+        shape.move(0, speed);
+    }
+};
+
+struct Enemy {
+    sf::Sprite sprite;
+    bool alive = true;
+
+    Enemy(sf::Texture& texture, float x, float y) { //derived from 
+        sprite.setTexture(texture);
+        sprite.setPosition(x, y);
+    }
+};
+
+int main() {
+    sf::RenderWindow window(sf::VideoMode(1921, 1080), "Space Invaders");
+
+    // Load font
+    sf::Font font;
+    if (!font.loadFromFile("arial.ttf")) {
+        std::cout << "Failed to load font!\n";
+        return -1;
+    }
+
+    // Menu text
+    sf::Text title("SPACE INVADERS", font, 60);
+    title.setPosition(650, 300);
+    title.setFillColor(sf::Color::White);
+
+    sf::Text instruction("Press Enter to Start", font, 30);
+    instruction.setPosition(760, 400);
+    instruction.setFillColor(sf::Color::White);
+
+    bool inMenu = true;
+
+    // Load background
+    sf::Texture backgroundTexture;
+    if (!backgroundTexture.loadFromFile("backgroundgame.png")) {
+        std::cout << "Failed to load background!\n";
+        return -1;
+    }
+    sf::Sprite background(backgroundTexture);
+
+    // Load player
+    sf::Texture playerTexture;
+    if (!playerTexture.loadFromFile("player.png")) {
+        std::cout << "Failed to load player.png!\n";
+        return -1;
+    }
+    sf::Sprite player(playerTexture);
+    player.setPosition(650, 620);
+
+    float playerSpeed = 2.f;
+
+    // Load enemy texture
+    sf::Texture enemyTexture;
+    if (!enemyTexture.loadFromFile("alien.png")) {
+        std::cout << "Failed to load alien.png!\n";
+        return -1;
+    }
+
+    std::vector<Enemy> enemies;
+    float startX = 600.f;
+    float spacing = 120.f;
+    float startY = 150.f;
+
+    for (int i = 0; i < 6; ++i) {
+        enemies.emplace_back(enemyTexture, startX + i * spacing, startY);
+    }
+
+    std::vector<Bullet> bullets;
+
+    // Main loop
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            // Allow closing with window button or ESC key
+            if (event.type == sf::Event::Closed ||
+                (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)) {
+                window.close();
+            }
+        }
+
+        window.clear();
+
+        if (inMenu) {
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Enter)) {
+                inMenu = false;
+            }
+
+            window.draw(background);
+            window.draw(title);
+            window.draw(instruction);
+        }
+        else {
+            // Player movement bounds
+            float leftBound = 350.f;
+            float rightBound = 1595.f - player.getGlobalBounds().width;
+
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) && player.getPosition().x > leftBound)
+                player.move(-playerSpeed, 0);
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) && player.getPosition().x < rightBound)
+                player.move(playerSpeed, 0);
+
+            // Shoot bullets
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
+                if (bullets.empty()) {
+                    bullets.emplace_back(player.getPosition().x + player.getGlobalBounds().width / 2 - 2.5f, player.getPosition().y);
+                }
+            }
+
+            // Update bullets
+            for (auto& bullet : bullets)
+                bullet.update();
+
+            // Bullet-enemy collision
+            for (auto& bullet : bullets) {
+                for (auto& enemy : enemies) {
+                    if (enemy.alive && bullet.shape.getGlobalBounds().intersects(enemy.sprite.getGlobalBounds())) {
+                        enemy.alive = false;
+                        bullet.shape.setPosition(-100, -100); // off-screen
+                    }
+                }
+            }
+
+            // Remove off-screen bullets
+            bullets.erase(
+                std::remove_if(bullets.begin(), bullets.end(), [](Bullet& b) {
+                    return b.shape.getPosition().y < 0;
+                    }),
+                bullets.end()
+            );
+
+            // Draw gameplay
+            window.draw(background);
+            window.draw(player);
+            for (auto& bullet : bullets)
+                window.draw(bullet.shape);
+            for (auto& enemy : enemies)
+                if (enemy.alive)
+                    window.draw(enemy.sprite);
+        }
+
+        window.display();
+    }
+
+    return 0;
+}
+
+
+

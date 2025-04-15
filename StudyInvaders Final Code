@@ -1,4 +1,3 @@
-// Study Invaders - Final Version with YOU WIN screen, retry, and exit functionality
 // Requires: flashcard.h, flashcard.cpp, flashcardmanager.h, flashcardmanager.cpp
 
 #include <SFML/Graphics.hpp>

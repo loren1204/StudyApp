@@ -1,0 +1,277 @@
+// Requires: flashcard.h, flashcard.cpp, flashcardmanager.h, flashcardmanager.cpp
+
+#include <SFML/Graphics.hpp>
+#include <iostream>
+#include <vector>
+#include <sstream>
+#include <cctype>
+#include <algorithm>
+#include <cmath>
+#include <random>
+#include <string>
+#include "flashcardmanager.h"
+using namespace std;
+
+string wrapText(const string& text, sf::Font& font, unsigned int characterSize, float maxWidth) {
+    istringstream wordStream(text);
+    string word, line, wrappedText;
+    sf::Text testLine("", font, characterSize);
+
+    while (wordStream >> word) {
+        string tempLine = line + (line.empty() ? "" : " ") + word;
+        testLine.setString(tempLine);
+
+        if (testLine.getLocalBounds().width > maxWidth) {
+            wrappedText += line + "\n";
+            line = word;
+        }
+        else {
+            line = tempLine;
+        }
+    }
+    if (!line.empty()) wrappedText += line;
+    return wrappedText;
+}
+
+struct Bullet {
+    sf::RectangleShape shape;
+    sf::Vector2f velocity;
+    sf::Vector2f target;
+
+    Bullet(float startX, float startY, sf::Vector2f targetPos, int colorCode) {
+        shape.setSize(sf::Vector2f(8.f, 20.f));
+        shape.setPosition(startX, startY);
+
+        if (colorCode == 1) shape.setFillColor(sf::Color::Red);
+        else if (colorCode == 2) shape.setFillColor(sf::Color::Blue);
+        else shape.setFillColor(sf::Color::Green);
+
+        target = targetPos;
+        sf::Vector2f direction = target - shape.getPosition();
+        float length = sqrt(direction.x * direction.x + direction.y * direction.y);
+        velocity = direction / length * 10.f;
+    }
+
+    void update() {
+        shape.move(velocity);
+    }
+
+    bool reachedTarget() {
+        sf::Vector2f toTarget = target - shape.getPosition();
+        return sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y) < 10.f;
+    }
+};
+
+int main() {
+    sf::RenderWindow window(sf::VideoMode(1921, 1080), "Study Invaders");
+    window.setFramerateLimit(60);
+
+    sf::Font font;
+    if (!font.loadFromFile("8514FIX.ttf")) return -1;
+
+    sf::Texture backgroundTexture;
+    if (!backgroundTexture.loadFromFile("backgroundgame.png")) return -1;
+    sf::Sprite background(backgroundTexture);
+
+    sf::Texture playerTexture;
+    if (!playerTexture.loadFromFile("player.png")) return -1;
+    sf::Sprite player(playerTexture);
+    player.setScale(1.5f, 1.5f);
+    player.setPosition(920, 740);
+
+    sf::Texture enemyTexture;
+    if (!enemyTexture.loadFromFile("alien.png")) return -1;
+    sf::Sprite enemy(enemyTexture);
+    enemy.setScale(1.7f, 1.7f);
+    enemy.setPosition(920, 200);
+    bool enemyAlive = true;
+
+    sf::Texture heartTexture;
+    if (!heartTexture.loadFromFile("heart_resized.png")) return -1;
+    vector<sf::Sprite> hearts;
+    for (int i = 0; i < 3; ++i) {
+        sf::Sprite heart(heartTexture);
+        heart.setScale(1.4f, 1.4f);
+        heart.setPosition(1710.f + i * 45.f, 20.f);
+        hearts.push_back(heart);
+    }
+
+    sf::Texture gameOverTexture;
+    if (!gameOverTexture.loadFromFile("game_over.png")) return -1;
+    sf::Sprite gameOver(gameOverTexture);
+    gameOver.setPosition(450, 45);
+
+    sf::Texture winTexture;
+    if (!winTexture.loadFromFile("you_win.png")) return -1;
+    sf::Sprite winScreen(winTexture);
+    winScreen.setPosition(450, 45);
+
+    sf::FloatRect retryBounds(645.f, 560.f, 190.f, 170.f);
+    sf::RectangleShape retryBox(sf::Vector2f(retryBounds.width, retryBounds.height));
+    retryBox.setPosition(retryBounds.left, retryBounds.top);
+    retryBox.setFillColor(sf::Color::Transparent);
+    retryBox.setOutlineThickness(0);
+
+    sf::Text retryLabel("RETRY (R)", font, 24);
+    retryLabel.setFillColor(sf::Color::Black);
+    sf::FloatRect textBounds = retryLabel.getLocalBounds();
+    retryLabel.setOrigin(textBounds.left + textBounds.width / 2.f, textBounds.top + textBounds.height / 2.f);
+    retryLabel.setPosition(retryBounds.left + retryBounds.width / 2.f - 5.f, retryBounds.top + retryBounds.height / 2.f - 10.f);
+
+    FlashcardManager manager;
+    if (!manager.loadFromFile("programming.txt")) {
+        std::cerr << "Failed to load flashcards.\n";
+        return -1;
+    }
+    const auto& cards = manager.getCards();
+    int currentCard = 0;
+    string enemyTargetWord = cards[currentCard].getAnswer();
+    string enemyDefinition = cards[currentCard].getQuestion();
+
+    int lives = 3;
+    bool heartRemoved = false;
+    int currentLetterIndex = 0;
+    string correctLetters = "";
+    vector<Bullet> bullets;
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> colorDist(1, 3);
+
+    bool inMenu = true;
+    bool showGameOver = false;
+    bool showWinScreen = false;
+
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed ||
+                (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape))
+                window.close();
+
+            if ((showGameOver || showWinScreen) && event.type == sf::Event::MouseButtonPressed) {
+                auto mousePos = sf::Mouse::getPosition(window);
+                if (retryBounds.contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+                    inMenu = true; lives = 3; enemyAlive = true; enemy.setPosition(920, 200);
+                    correctLetters = ""; bullets.clear(); currentLetterIndex = 0; currentCard = 0;
+                    enemyTargetWord = cards[currentCard].getAnswer();
+                    enemyDefinition = cards[currentCard].getQuestion();
+                    showGameOver = false; showWinScreen = false;
+                }
+            }
+        }
+
+        if ((showGameOver || showWinScreen) && sf::Keyboard::isKeyPressed(sf::Keyboard::R)) {
+            inMenu = true; lives = 3; enemyAlive = true; enemy.setPosition(920, 200);
+            correctLetters = ""; bullets.clear(); currentLetterIndex = 0; currentCard = 0;
+            enemyTargetWord = cards[currentCard].getAnswer();
+            enemyDefinition = cards[currentCard].getQuestion();
+            showGameOver = false; showWinScreen = false;
+        }
+        if (showWinScreen && sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+            window.close();
+        }
+
+        if (inMenu) {
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Enter)) inMenu = false;
+            window.clear(); window.draw(background);
+            sf::Text title("STUDY INVADERS", font, 60);
+            title.setPosition(700, 300);
+            title.setFillColor(sf::Color::White);
+            window.draw(title);
+            sf::Text instruction("Press Enter to Start", font, 30);
+            instruction.setPosition(780, 400);
+            instruction.setFillColor(sf::Color::White);
+            window.draw(instruction);
+            window.display(); continue;
+        }
+
+        if (!showGameOver && !showWinScreen && event.type == sf::Event::TextEntered && enemyAlive && lives > 0) {
+            if (isalnum(event.text.unicode)) {
+                char typedChar = tolower(static_cast<char>(event.text.unicode));
+                char expectedChar = enemyTargetWord[currentLetterIndex];
+                if (typedChar == expectedChar) {
+                    float bulletX = player.getPosition().x + player.getGlobalBounds().width / 2;
+                    float bulletY = player.getPosition().y;
+                    sf::Vector2f enemyCenter(enemy.getPosition().x + enemy.getGlobalBounds().width / 2, enemy.getPosition().y + enemy.getGlobalBounds().height / 2);
+                    int colorCode = colorDist(gen);
+                    bullets.emplace_back(bulletX, bulletY, enemyCenter, colorCode);
+                    correctLetters += typedChar;
+                    currentLetterIndex++;
+                    if (currentLetterIndex >= enemyTargetWord.size()) {
+                        currentCard++;
+                        if (currentCard < cards.size()) {
+                            enemyAlive = true; enemy.setPosition(920, 200);
+                            currentLetterIndex = 0; correctLetters = "";
+                            enemyTargetWord = cards[currentCard].getAnswer();
+                            enemyDefinition = cards[currentCard].getQuestion();
+                        }
+                        else {
+                            showWinScreen = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        float leftBound = 350.f;
+        float rightBound = 1595.f - player.getGlobalBounds().width;
+        if (!showGameOver && !showWinScreen) {
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) && player.getPosition().x > leftBound)
+                player.move(-5.f, 0);
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) && player.getPosition().x < rightBound)
+                player.move(5.f, 0);
+        }
+
+        if (enemyAlive && lives > 0) {
+            sf::Vector2f playerPos = player.getPosition();
+            sf::Vector2f enemyPos = enemy.getPosition();
+            float enemySpeedX = 0.5f, enemySpeedY = 0.5f;
+            if (playerPos.x > enemyPos.x) enemy.move(enemySpeedX, 0);
+            else if (playerPos.x < enemyPos.x) enemy.move(-enemySpeedX, 0);
+            if (enemyPos.y + enemy.getGlobalBounds().height < player.getPosition().y + 100.f) {
+                enemy.move(0, enemySpeedY); heartRemoved = false;
+            }
+            else if (!heartRemoved) {
+                lives--; heartRemoved = true;
+                if (lives > 0) enemy.setPosition(920, 200);
+                else showGameOver = true;
+            }
+        }
+
+        for (auto& bullet : bullets) bullet.update();
+        bullets.erase(remove_if(bullets.begin(), bullets.end(), [](Bullet& b) { return b.reachedTarget(); }), bullets.end());
+
+        window.clear(); window.draw(background);
+        if (enemyAlive && lives > 0) window.draw(enemy);
+        window.draw(player);
+        for (auto& bullet : bullets) window.draw(bullet.shape);
+        for (int i = 0; i < lives && i < hearts.size(); ++i) window.draw(hearts[i]);
+
+        sf::FloatRect textBoxBounds(430.f, 940.f, 1080.f, 100.f);
+        string wrappedDef = wrapText(enemyDefinition, font, 26, textBoxBounds.width);
+        sf::Text defText(wrappedDef, font, 26);
+        defText.setFillColor(sf::Color::Black);
+        defText.setPosition(textBoxBounds.left, textBoxBounds.top);
+        defText.setLineSpacing(1.2f);
+        window.draw(defText);
+
+        sf::Text lettersAbovePlayer(correctLetters, font, 24);
+        lettersAbovePlayer.setFillColor(sf::Color::Green);
+        lettersAbovePlayer.setPosition(player.getPosition().x + 10.f, player.getPosition().y - 40.f);
+        window.draw(lettersAbovePlayer);
+
+        if (showGameOver) {
+            window.draw(gameOver);
+            window.draw(retryBox);
+            window.draw(retryLabel);
+        }
+        if (showWinScreen) {
+            window.draw(winScreen);
+            window.draw(retryBox);
+            window.draw(retryLabel);
+        }
+
+        window.display();
+    }
+    return 0;
+}

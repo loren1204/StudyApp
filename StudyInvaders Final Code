@@ -1,3 +1,4 @@
+// Study Invaders - Final Version with YOU WIN screen, retry, and exit functionality
 // Requires: flashcard.h, flashcard.cpp, flashcardmanager.h, flashcardmanager.cpp
 
 #include <SFML/Graphics.hpp>
@@ -12,6 +13,7 @@
 #include "flashcardmanager.h"
 using namespace std;
 
+// Function to wrap long text (definitions) into lines that fit within a set max width
 string wrapText(const string& text, sf::Font& font, unsigned int characterSize, float maxWidth) {
     istringstream wordStream(text);
     string word, line, wrappedText;
@@ -33,6 +35,7 @@ string wrapText(const string& text, sf::Font& font, unsigned int characterSize, 
     return wrappedText;
 }
 
+// Bullet structure to manage direction, movement, and rendering
 struct Bullet {
     sf::RectangleShape shape;
     sf::Vector2f velocity;
@@ -66,9 +69,11 @@ int main() {
     sf::RenderWindow window(sf::VideoMode(1921, 1080), "Study Invaders");
     window.setFramerateLimit(60);
 
+    // Load font
     sf::Font font;
     if (!font.loadFromFile("8514FIX.ttf")) return -1;
 
+    // Load background and sprite assets
     sf::Texture backgroundTexture;
     if (!backgroundTexture.loadFromFile("backgroundgame.png")) return -1;
     sf::Sprite background(backgroundTexture);
@@ -86,6 +91,7 @@ int main() {
     enemy.setPosition(920, 200);
     bool enemyAlive = true;
 
+    // Load heart/life UI
     sf::Texture heartTexture;
     if (!heartTexture.loadFromFile("heart_resized.png")) return -1;
     vector<sf::Sprite> hearts;
@@ -96,6 +102,7 @@ int main() {
         hearts.push_back(heart);
     }
 
+    // Load game over and win screen textures
     sf::Texture gameOverTexture;
     if (!gameOverTexture.loadFromFile("game_over.png")) return -1;
     sf::Sprite gameOver(gameOverTexture);
@@ -106,18 +113,21 @@ int main() {
     sf::Sprite winScreen(winTexture);
     winScreen.setPosition(450, 45);
 
+    // Retry button logic and bounding box
     sf::FloatRect retryBounds(645.f, 560.f, 190.f, 170.f);
     sf::RectangleShape retryBox(sf::Vector2f(retryBounds.width, retryBounds.height));
     retryBox.setPosition(retryBounds.left, retryBounds.top);
     retryBox.setFillColor(sf::Color::Transparent);
     retryBox.setOutlineThickness(0);
 
+    // Retry text
     sf::Text retryLabel("RETRY (R)", font, 24);
     retryLabel.setFillColor(sf::Color::Black);
     sf::FloatRect textBounds = retryLabel.getLocalBounds();
     retryLabel.setOrigin(textBounds.left + textBounds.width / 2.f, textBounds.top + textBounds.height / 2.f);
     retryLabel.setPosition(retryBounds.left + retryBounds.width / 2.f - 5.f, retryBounds.top + retryBounds.height / 2.f - 10.f);
 
+    // Load flashcards from file
     FlashcardManager manager;
     if (!manager.loadFromFile("programming.txt")) {
         std::cerr << "Failed to load flashcards.\n";
@@ -128,6 +138,7 @@ int main() {
     string enemyTargetWord = cards[currentCard].getAnswer();
     string enemyDefinition = cards[currentCard].getQuestion();
 
+    // Game state variables
     int lives = 3;
     bool heartRemoved = false;
     int currentLetterIndex = 0;
@@ -141,13 +152,16 @@ int main() {
     bool showGameOver = false;
     bool showWinScreen = false;
 
+    // Main game loop
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
+            // Exit game
             if (event.type == sf::Event::Closed ||
                 (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape))
                 window.close();
 
+            // Retry with mouse click on win/lose screen
             if ((showGameOver || showWinScreen) && event.type == sf::Event::MouseButtonPressed) {
                 auto mousePos = sf::Mouse::getPosition(window);
                 if (retryBounds.contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
@@ -160,6 +174,7 @@ int main() {
             }
         }
 
+        // Retry game by pressing R
         if ((showGameOver || showWinScreen) && sf::Keyboard::isKeyPressed(sf::Keyboard::R)) {
             inMenu = true; lives = 3; enemyAlive = true; enemy.setPosition(920, 200);
             correctLetters = ""; bullets.clear(); currentLetterIndex = 0; currentCard = 0;
@@ -167,10 +182,12 @@ int main() {
             enemyDefinition = cards[currentCard].getQuestion();
             showGameOver = false; showWinScreen = false;
         }
+        // Exit game after winning by pressing E
         if (showWinScreen && sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
             window.close();
         }
 
+        // Menu screen loop
         if (inMenu) {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Enter)) inMenu = false;
             window.clear(); window.draw(background);
@@ -185,6 +202,7 @@ int main() {
             window.display(); continue;
         }
 
+        // Typing and matching letters while enemy is alive
         if (!showGameOver && !showWinScreen && event.type == sf::Event::TextEntered && enemyAlive && lives > 0) {
             if (isalnum(event.text.unicode)) {
                 char typedChar = tolower(static_cast<char>(event.text.unicode));
@@ -197,6 +215,7 @@ int main() {
                     bullets.emplace_back(bulletX, bulletY, enemyCenter, colorCode);
                     correctLetters += typedChar;
                     currentLetterIndex++;
+                    // Move to next card/enemy
                     if (currentLetterIndex >= enemyTargetWord.size()) {
                         currentCard++;
                         if (currentCard < cards.size()) {
@@ -206,13 +225,14 @@ int main() {
                             enemyDefinition = cards[currentCard].getQuestion();
                         }
                         else {
-                            showWinScreen = true;
+                            showWinScreen = true;  // All enemies defeated
                         }
                     }
                 }
             }
         }
 
+        // Player movement controls
         float leftBound = 350.f;
         float rightBound = 1595.f - player.getGlobalBounds().width;
         if (!showGameOver && !showWinScreen) {
@@ -222,6 +242,7 @@ int main() {
                 player.move(5.f, 0);
         }
 
+        // Enemy tracking and moving toward player
         if (enemyAlive && lives > 0) {
             sf::Vector2f playerPos = player.getPosition();
             sf::Vector2f enemyPos = enemy.getPosition();
@@ -238,9 +259,11 @@ int main() {
             }
         }
 
+        // Bullet updates and cleanup
         for (auto& bullet : bullets) bullet.update();
         bullets.erase(remove_if(bullets.begin(), bullets.end(), [](Bullet& b) { return b.reachedTarget(); }), bullets.end());
 
+        // Draw gameplay UI
         window.clear(); window.draw(background);
         if (enemyAlive && lives > 0) window.draw(enemy);
         window.draw(player);
@@ -260,6 +283,7 @@ int main() {
         lettersAbovePlayer.setPosition(player.getPosition().x + 10.f, player.getPosition().y - 40.f);
         window.draw(lettersAbovePlayer);
 
+        // Draw game over or win screen if triggered
         if (showGameOver) {
             window.draw(gameOver);
             window.draw(retryBox);

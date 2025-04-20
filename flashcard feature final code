@@ -241,3 +241,38 @@ int MainMenu::GetPressedItem() const {
     return selectedItemIndex;
 }
 
+START OF FILE FOUR 
+#ifndef FLASHCARDMANAGER_H
+#define FLASHCARDMANAGER_H
+
+#include <vector>
+#include "flashcard.h"
+
+// FlashcardManager class is responsible for managing a collection of flashcards.
+// This demonstrates the OOP principle of RESPONSIBILITY: a class has a clear, focused role.
+class FlashcardManager {
+private:
+    // ENCAPSULATION: The flashcard collection is private to protect internal data
+    std::vector<Flashcard> cards;
+
+public:
+    // Adds a new flashcard to the collection
+    // Shows ABSTRACTION: caller doesn't need to know how cards are stored
+    void addFlashcard(const Flashcard& card);
+
+    // Starts a quiz session with the user using stored flashcards
+    // ABSTRACTION: hides quiz logic details behind a simple interface
+    void quizUser() const;
+
+    // Loads flashcards from a file and populates the collection
+    // ABSTRACTION + RESPONSIBILITY: separates file-handling from main program logic
+    bool loadFromFile(const std::string& filename);
+    
+    // Provides read-only access to the stored flashcards
+    // This controlled access is a key part of ENCAPSULATION
+    const std::vector<Flashcard>& getCards() const;
+};
+
+#endif
+
+

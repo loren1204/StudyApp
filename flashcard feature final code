@@ -276,4 +276,123 @@ public:
 
 #endif
 
+START OF FILE FIVE
+FLASHCARDMANAGER.CPP
+#include "FlashcardManager.h"
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <algorithm>
 
+// Helper function to trim whitespace
+std::string trim(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t\r\n");
+    size_t last = str.find_last_not_of(" \t\r\n");
+    if (first == std::string::npos || last == std::string::npos)
+        return "";
+    return str.substr(first, (last - first + 1));
+}
+
+// Adds a flashcard to the internal vector
+void FlashcardManager::addFlashcard(const Flashcard& card) {
+    cards.push_back(card);
+}
+
+// Loads flashcards from a file with "Question:" and "Answer:" format
+bool FlashcardManager::loadFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Could not open file: " << filename << "\n";
+        return false;
+    }
+
+    std::string line;
+    std::string question;
+    std::string answer;
+    bool readingQuestion = false;
+
+    while (std::getline(file, line)) {
+        line = trim(line);
+
+        if (line.find("Question:") == 0) {
+            readingQuestion = true;
+            question = trim(line.substr(9));
+        }
+        else if (line.find("Answer:") == 0) {
+            answer = trim(line.substr(7));
+            addFlashcard(Flashcard(question, answer));
+            readingQuestion = false;
+        }
+        else if (readingQuestion) {
+            // Allow multi-line questions
+            question += "\n" + line;
+        }
+    }
+
+    file.close();
+    return true;
+}
+
+// Simple terminal-based quiz (optional use for testing)
+void FlashcardManager::quizUser() const {
+    for (const auto& card : cards) {
+        std::string userAnswer;
+        std::cout << "Q: " << card.getQuestion() << "\nYour answer: ";
+        std::getline(std::cin, userAnswer);
+
+        if (userAnswer == card.getAnswer()) {
+            std::cout << "Correct!\n";
+        }
+        else {
+            std::cout << "Incorrect. The answer was: " << card.getAnswer() << "\n";
+        }
+    }
+}
+
+// Getter for accessing flashcards (used by SFML window)
+const std::vector<Flashcard>& FlashcardManager::getCards() const {
+    return cards;
+}
+
+
+START OF FILE SIX
+MAINMENU.H
+#pragma once
+ MainMenu.h
+#ifndef MAINMENU_H
+#define MAINMENU_H
+
+#include <SFML/Graphics.hpp>
+
+class MainMenu {
+public:
+    MainMenu(float width, float height);
+    void draw(sf::RenderWindow& window);
+    void MoveUp();
+    void MoveDown();
+    int GetPressedItem() const;
+
+private:
+    int selectedItemIndex;
+    sf::Font font;
+    sf::Text menu[3]; // example with 3 menu items
+};
+
+#endif
+
+START OF FILE SEVEN 
+FLASHCARD.CPP
+// flashcard.cpp
+#include "flashcard.h"
+
+Flashcard::Flashcard(const std::string& q, const std::string& a) {
+    question = q;
+    answer = a;
+}
+
+std::string Flashcard::getQuestion() const {
+    return question;
+}
+std::string Flashcard::getAnswer() const {
+    return answer;
+}
